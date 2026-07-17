@@ -215,7 +215,10 @@
 
   <div class="accountbar">
     <div class="who">Signed in as <b id="whoName">You</b></div>
-    <button class="btn secondary" id="logoutBtn">Log out</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn secondary" id="accountBtn">Account</button>
+      <button class="btn secondary" id="logoutBtn">Log out</button>
+    </div>
   </div>
 
   <div class="hero">
@@ -427,6 +430,10 @@ const db = getFirestore(app);
     }
   }
 
+
+  document.getElementById('accountBtn').addEventListener('click', () => {
+    window.location.href = 'account.html';
+  });
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await signOut(auth);
