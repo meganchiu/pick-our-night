@@ -413,10 +413,14 @@ const auth = getAuth(app);
   }
 
   // ---------- Location search (free-text business/address search) ----------
-  // Uses OpenStreetMap's Nominatim geocoder, biased toward the Fort Worth / 76108 area.
+  // Photon (by Komoot) indexes named places/businesses much better than plain
+  // address geocoders, so it's tried first; Nominatim is a fallback for
+  // straightforward addresses Photon doesn't have. Both are free, no API key.
   const locationSearch = document.getElementById('locationSearch');
   const searchResults = document.getElementById('searchResults');
-  const FW_VIEWBOX = '-97.7170,33.0175,-97.2170,32.6175'; // roughly the DFW/Fort Worth area
+  const FW_CENTER_LAT = 32.8175;
+  const FW_CENTER_LON = -97.4670;
+  const FW_VIEWBOX = '-97.7170,33.0175,-97.2170,32.6175'; // roughly the DFW/Fort Worth area, for the Nominatim fallback
 
   let searchTimer = null;
   locationSearch.addEventListener('input', () => {
@@ -430,28 +434,61 @@ const auth = getAuth(app);
     searchTimer = setTimeout(() => runLocationSearch(q), 400);
   });
 
+  function renderSearchResults(items){
+    if(!items.length){
+      searchResults.innerHTML = '<div class="search-empty">No matches — try a different search, or click the map to place a pin manually.</div>';
+      return;
+    }
+    searchResults.innerHTML = '';
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'search-result';
+      row.innerHTML = `<div class="sr-name">${escapeHtml(item.name)}</div><div class="sr-address">${escapeHtml(item.address)}</div>`;
+      row.addEventListener('click', () => {
+        showCandidate(item.lat, item.lon, item.name);
+        locationSearch.value = item.name;
+        searchResults.innerHTML = '';
+      });
+      searchResults.appendChild(row);
+    });
+  }
+
+  async function searchPhoton(query){
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&lat=${FW_CENTER_LAT}&lon=${FW_CENTER_LON}&lang=en`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data.features || []).map(f => {
+      const p = f.properties;
+      const name = p.name || p.street || 'Unnamed location';
+      const addressParts = [p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street, p.city, p.state, p.postcode].filter(Boolean);
+      return {
+        name,
+        address: addressParts.join(', ') || p.country || '',
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0]
+      };
+    });
+  }
+
+  async function searchNominatim(query){
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&viewbox=${FW_VIEWBOX}&bounded=0&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const results = await res.json();
+    return results.map(r => ({
+      name: r.name || r.display_name.split(',')[0],
+      address: r.display_name,
+      lat: parseFloat(r.lat),
+      lon: parseFloat(r.lon)
+    }));
+  }
+
   async function runLocationSearch(query){
     try{
-      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&viewbox=${FW_VIEWBOX}&bounded=0&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      const results = await res.json();
-      if(!results.length){
-        searchResults.innerHTML = '<div class="search-empty">No matches — try a different search, or click the map to place a pin manually.</div>';
-        return;
+      let items = await searchPhoton(query);
+      if(!items.length){
+        items = await searchNominatim(query);
       }
-      searchResults.innerHTML = '';
-      results.forEach(r => {
-        const row = document.createElement('div');
-        row.className = 'search-result';
-        const mainName = r.name || r.display_name.split(',')[0];
-        row.innerHTML = `<div class="sr-name">${escapeHtml(mainName)}</div><div class="sr-address">${escapeHtml(r.display_name)}</div>`;
-        row.addEventListener('click', () => {
-          showCandidate(parseFloat(r.lat), parseFloat(r.lon), mainName);
-          locationSearch.value = mainName;
-          searchResults.innerHTML = '';
-        });
-        searchResults.appendChild(row);
-      });
+      renderSearchResults(items);
     }catch(e){
       searchResults.innerHTML = '<div class="search-empty">Search failed — try again, or click the map to place a pin manually.</div>';
     }
