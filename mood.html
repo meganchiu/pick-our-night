@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick Our Night — Set the Mood</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Monoton&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night: #14162B;
+    --night-2: #1D2044;
+    --panel: #23264A;
+    --pink: #FF5D8F;
+    --amber: #FFC857;
+    --text: #F2EFEA;
+    --muted: #9296C4;
+    --line: rgba(242,239,234,0.12);
+    --radius: 14px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(255,93,143,0.14), transparent 40%),
+      radial-gradient(circle at 85% 10%, rgba(255,200,87,0.10), transparent 45%),
+      var(--night);
+    color: var(--text);
+    font-family: 'Work Sans', sans-serif;
+    min-height: 100vh;
+  }
+  .wrap{ max-width: 1180px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .accountbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 10px 18px; background: var(--panel); border:1px solid var(--line);
+    border-radius: var(--radius); margin-bottom: 26px;
+  }
+  .accountbar .who{ font-size:13px; color: var(--muted); }
+  .accountbar .who b{ color: var(--text); }
+  .btn{
+    border:none; cursor:pointer; font-family:'IBM Plex Mono',monospace; letter-spacing:.06em;
+    text-transform:uppercase; font-size:12px; padding:9px 15px; border-radius:8px;
+    background: var(--amber); color:#20200c; font-weight:600; transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover{ transform: translateY(-1px); box-shadow:0 4px 14px rgba(255,200,87,.35); }
+  .btn.secondary{ background: transparent; color: var(--text); border:1px solid var(--line); }
+  .btn.pink{ background: var(--pink); color:#2a0c17; }
+
+  .hero{ text-align:center; padding: 6px 0 30px; border-bottom: 1px solid var(--line); margin-bottom: 30px; }
+  h1{
+    font-family:'Monoton', cursive; font-weight:400; letter-spacing:.03em;
+    font-size: clamp(28px, 5vw, 48px); margin:0 0 8px;
+    color: var(--pink);
+    text-shadow: 0 0 18px rgba(255,93,143,0.55), 0 0 46px rgba(255,93,143,0.25);
+    line-height:1.1;
+  }
+  .hero p{ color: var(--muted); max-width: 560px; margin: 0 auto; font-size:14px; }
+  #areaLabel{
+    font-family:'IBM Plex Mono', monospace; letter-spacing:.1em; font-size:11px;
+    color: var(--amber); text-transform:uppercase; margin-bottom:10px;
+  }
+  #areaLabel a{ color: var(--amber); cursor:pointer; text-decoration:underline; margin-left:6px; font-size:10.5px; }
+  .area-panel{
+    display:none; max-width:360px; margin: 14px auto 0; position:relative; text-align:left;
+  }
+  .area-panel.show{ display:block; }
+  .area-panel input{
+    width:100%; background: var(--night-2); border:1px solid var(--line); color: var(--text);
+    padding: 9px 11px; border-radius:8px; font-family:'Work Sans',sans-serif; font-size:14px;
+  }
+
+  .screen{ max-width: 480px; margin: 0 auto; }
+
+  .panel{
+    background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .panel h2{
+    font-size: 13px; text-transform:uppercase; letter-spacing:.14em; color: var(--muted);
+    font-family:'IBM Plex Mono', monospace; margin: 0 0 16px; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2 .dot{ width:6px;height:6px;border-radius:50%; background: var(--amber); box-shadow:0 0 8px var(--amber); }
+
+  .mood-row{ margin-bottom:16px; }
+  .mood-row label{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; color: var(--text); }
+  .mood-row .lo,.mood-row .hi{ color: var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11px; }
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:6px; border-radius:3px;
+    background: linear-gradient(90deg, rgba(255,93,143,.5), rgba(255,200,87,.5));
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:18px; height:18px; border-radius:50%;
+    background: var(--text); border:3px solid var(--pink); cursor:pointer;
+    box-shadow:0 0 10px rgba(255,93,143,.6);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px; height:18px; border-radius:50%; background: var(--text);
+    border:3px solid var(--pink); cursor:pointer;
+  }
+
+  .search-results{
+    position:relative; margin-top:4px; border-radius:8px; overflow:hidden;
+    background: var(--night-2); border:1px solid var(--line);
+  }
+  .search-results:empty{ display:none; border:none; }
+  .search-result{
+    padding: 9px 11px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--line);
+  }
+  .search-result:last-child{ border-bottom:none; }
+  .search-result:hover{ background: rgba(255,200,87,0.10); }
+  .search-result .sr-name{ font-weight:600; }
+  .search-loading, .search-empty{ padding: 9px 11px; font-size:12.5px; color: var(--muted); font-style:italic; }
+
+  footer{ text-align:center; margin-top: 40px; font-size:11px; color: var(--muted); font-family:'IBM Plex Mono',monospace; }
+
+  .loading-screen{
+    position:fixed; inset:0; z-index:9999; background: var(--night);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .loading-screen.hide{ display:none; }
+  .loading-text{
+    font-family:'IBM Plex Mono',monospace; color: var(--amber); letter-spacing:.1em; font-size:13px;
+    animation: pulse-loading 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse-loading{ 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-text">— loading tonight's forecast —</div>
+</div>
+<div class="wrap">
+
+  <div class="accountbar">
+    <div class="who">Signed in as <b id="whoName">You</b></div>
+    <button class="btn secondary" id="logoutBtn">Log out</button>
+  </div>
+
+  <div class="hero">
+    <div id="areaLabel">Fort Worth · 76108 <a id="changeAreaLink">(change)</a></div>
+    <h1>Pick Our Night</h1>
+    <p>Set the mood, then we'll pull up the map and your favorite spots.</p>
+    <div class="area-panel" id="areaPanel">
+      <input type="text" id="areaSearch" placeholder="Search your city or neighborhood" autocomplete="off">
+      <div id="areaResults" class="search-results"></div>
+    </div>
+  </div>
+
+  <div class="screen">
+    <div class="panel">
+      <h2><span class="dot"></span>Set the mood</h2>
+      <div class="mood-row">
+        <label><span>Energy</span><span class="lo">Tired</span></label>
+        <input type="range" id="moodEnergy" min="0" max="100" value="50">
+        <div style="display:flex;justify-content:flex-end"><span class="hi">Energized</span></div>
+      </div>
+      <div class="mood-row">
+        <label><span>Setting</span><span class="lo">Indoor</span></label>
+        <input type="range" id="moodSetting" min="0" max="100" value="50">
+        <div style="display:flex;justify-content:flex-end"><span class="hi">Outdoor</span></div>
+      </div>
+      <div class="mood-row">
+        <label><span>Budget</span><span class="lo">Free</span></label>
+        <input type="range" id="moodBudget" min="0" max="100" value="50">
+        <div style="display:flex;justify-content:flex-end"><span class="hi">Splurge</span></div>
+      </div>
+      <button class="btn pink" id="continueBtn" style="width:100%; margin-top:8px;">Continue →</button>
+    </div>
+  </div>
+
+  <footer>Signed in — your mood carries over to the next step.</footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+// Must match the config in index.html and plan.html — same Firebase project.
+const firebaseConfig = {
+  apiKey: "AIzaSyCaRo7wJHEw2gXIDMhgbcxTvgzV1CcfDeQ",
+  authDomain: "pick-our-night.firebaseapp.com",
+  projectId: "pick-our-night",
+  storageBucket: "pick-our-night.firebasestorage.app",
+  messagingSenderId: "595479555026",
+  appId: "1:595479555026:web:60b31e8624c4c12752360b",
+  measurementId: "G-VMFQZJPQRD"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+(async function(){
+  let areaLat = 32.8175;
+  let areaLon = -97.4670;
+  let areaName = 'Fort Worth · 76108';
+  let STORAGE_KEY = 'spots-fort-worth-76108';
+  let currentUser = null;
+
+  // Same grid-based key scheme as plan.html, so areas set here line up with spots there.
+  function areaStorageKey(lat, lon){
+    const gridLat = (Math.round(lat * 10) / 10).toFixed(1);
+    const gridLon = (Math.round(lon * 10) / 10).toFixed(1);
+    return `spots-grid-${gridLat}_${gridLon}`;
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    if(!user){
+      window.location.href = 'index.html';
+      return;
+    }
+    try{
+      currentUser = user;
+      document.getElementById('whoName').textContent = user.displayName || user.email;
+      const savedArea = await loadUserArea(user.uid);
+      if(savedArea){
+        areaLat = savedArea.areaLat;
+        areaLon = savedArea.areaLon;
+        areaName = savedArea.areaName;
+        STORAGE_KEY = savedArea.storageKey;
+        updateAreaLabelUI();
+      }
+    }catch(e){
+      console.error('Failed to load area', e);
+    }finally{
+      document.getElementById('loadingScreen').classList.add('hide');
+    }
+  });
+
+  async function loadUserArea(uid){
+    try{
+      const snap = await getDoc(doc(db, 'users', uid));
+      return snap.exists() ? snap.data().area || null : null;
+    }catch(e){
+      console.error('Failed to load saved area', e);
+      return null;
+    }
+  }
+
+  async function saveUserArea(uid, areaData){
+    try{
+      await setDoc(doc(db, 'users', uid), { area: areaData }, { merge: true });
+    }catch(e){
+      console.error('Failed to save area', e);
+    }
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await signOut(auth);
+    window.location.href = 'index.html';
+  });
+
+  // ---------- Area switching ----------
+  const areaLabel = document.getElementById('areaLabel');
+  const changeAreaLink = document.getElementById('changeAreaLink');
+  const areaPanel = document.getElementById('areaPanel');
+  const areaSearchInput = document.getElementById('areaSearch');
+  const areaResults = document.getElementById('areaResults');
+
+  function updateAreaLabelUI(){
+    areaLabel.innerHTML = `${escapeHtml(areaName)} <a id="changeAreaLink">(change)</a>`;
+    document.getElementById('changeAreaLink').addEventListener('click', () => {
+      areaPanel.classList.toggle('show');
+      if(areaPanel.classList.contains('show')) areaSearchInput.focus();
+    });
+  }
+
+  changeAreaLink.addEventListener('click', () => {
+    areaPanel.classList.toggle('show');
+    if(areaPanel.classList.contains('show')) areaSearchInput.focus();
+  });
+
+  let areaSearchTimer = null;
+  areaSearchInput.addEventListener('input', () => {
+    clearTimeout(areaSearchTimer);
+    const q = areaSearchInput.value.trim();
+    if(q.length < 3){ areaResults.innerHTML = ''; return; }
+    areaResults.innerHTML = '<div class="search-loading">Searching…</div>';
+    areaSearchTimer = setTimeout(async () => {
+      try{
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=en&osm_tag=place`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const items = (data.features || []).map(f => {
+          const p = f.properties;
+          const name = [p.name, p.state, p.country].filter(Boolean).join(', ');
+          return { name, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+        });
+        if(!items.length){
+          areaResults.innerHTML = '<div class="search-empty">No matches — try a broader search (just the city name).</div>';
+          return;
+        }
+        areaResults.innerHTML = '';
+        items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'search-result';
+          row.innerHTML = `<div class="sr-name">${escapeHtml(item.name)}</div>`;
+          row.addEventListener('click', async () => {
+            areaLat = item.lat;
+            areaLon = item.lon;
+            areaName = item.name;
+            STORAGE_KEY = areaStorageKey(item.lat, item.lon);
+            updateAreaLabelUI();
+            areaPanel.classList.remove('show');
+            areaSearchInput.value = '';
+            areaResults.innerHTML = '';
+            if(currentUser){
+              await saveUserArea(currentUser.uid, { areaLat, areaLon, areaName, storageKey: STORAGE_KEY });
+            }
+          });
+          areaResults.appendChild(row);
+        });
+      }catch(e){
+        areaResults.innerHTML = '<div class="search-empty">Search failed — try again.</div>';
+      }
+    }, 400);
+  });
+
+  // ---------- Continue: hand mood off to plan.html via sessionStorage ----------
+  document.getElementById('continueBtn').addEventListener('click', () => {
+    const mood = {
+      energy: +document.getElementById('moodEnergy').value,
+      setting: +document.getElementById('moodSetting').value,
+      budget: +document.getElementById('moodBudget').value
+    };
+    sessionStorage.setItem('pon_mood', JSON.stringify(mood));
+    window.location.href = 'plan.html';
+  });
+})();
+</script>
+</body>
+</html>

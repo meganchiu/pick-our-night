@@ -244,7 +244,7 @@
     }
     try{
       await signInWithEmailAndPassword(auth, email, password);
-      window.location.href = 'dashboard.html';
+      window.location.href = 'mood.html';
     }catch(err){
       showError(loginError, friendlyError(err));
     }
@@ -264,7 +264,7 @@
     try{
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       if(name){ await updateProfile(cred.user, { displayName: name }); }
-      window.location.href = 'dashboard.html';
+      window.location.href = 'mood.html';
     }catch(err){
       showError(signupError, friendlyError(err));
     }
