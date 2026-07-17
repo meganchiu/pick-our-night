@@ -329,7 +329,9 @@ import {
   doc,
   query,
   where,
-  getDocs
+  getDocs,
+  getDoc,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 // Use the exact same config as index.html — must be the same Firebase project.
@@ -363,11 +365,42 @@ const db = getFirestore(app);
     }
     currentUser = user;
     document.getElementById('whoName').textContent = user.displayName || user.email;
+
+    // Restore whichever area this person last set, if any, instead of defaulting to Fort Worth.
+    const savedArea = await loadUserArea(user.uid);
+    if(savedArea){
+      areaLat = savedArea.areaLat;
+      areaLon = savedArea.areaLon;
+      areaName = savedArea.areaName;
+      STORAGE_KEY = savedArea.storageKey;
+      updateAreaLabelUI();
+      map.setView([areaLat, areaLon], 12);
+    }
+
     // Data depends on knowing who's logged in, so it loads only once auth resolves.
     spots = await loadSpots();
     renderList();
     renderMarkers();
   });
+
+  async function loadUserArea(uid){
+    try{
+      const snap = await getDoc(doc(db, 'users', uid));
+      return snap.exists() ? snap.data().area || null : null;
+    }catch(e){
+      console.error('Failed to load saved area', e);
+      return null;
+    }
+  }
+
+  async function saveUserArea(uid, areaData){
+    try{
+      await setDoc(doc(db, 'users', uid), { area: areaData }, { merge: true });
+    }catch(e){
+      console.error('Failed to save area', e);
+    }
+  }
+
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await signOut(auth);
@@ -738,6 +771,14 @@ const db = getFirestore(app);
   const areaSearchInput = document.getElementById('areaSearch');
   const areaResults = document.getElementById('areaResults');
 
+  function updateAreaLabelUI(){
+    areaLabel.innerHTML = `${escapeHtml(areaName)} <a id="changeAreaLink">(change)</a>`;
+    document.getElementById('changeAreaLink').addEventListener('click', () => {
+      areaPanel.classList.toggle('show');
+      if(areaPanel.classList.contains('show')) areaSearchInput.focus();
+    });
+  }
+
   changeAreaLink.addEventListener('click', () => {
     areaPanel.classList.toggle('show');
     if(areaPanel.classList.contains('show')) areaSearchInput.focus();
@@ -773,15 +814,14 @@ const db = getFirestore(app);
             areaLon = item.lon;
             areaName = item.name;
             STORAGE_KEY = `spots-${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-            areaLabel.innerHTML = `${escapeHtml(areaName)} <a id="changeAreaLink">(change)</a>`;
-            document.getElementById('changeAreaLink').addEventListener('click', () => {
-              areaPanel.classList.toggle('show');
-              if(areaPanel.classList.contains('show')) areaSearchInput.focus();
-            });
+            updateAreaLabelUI();
             map.setView([areaLat, areaLon], 12);
             areaPanel.classList.remove('show');
             areaSearchInput.value = '';
             areaResults.innerHTML = '';
+            if(currentUser){
+              await saveUserArea(currentUser.uid, { areaLat, areaLon, areaName, storageKey: STORAGE_KEY });
+            }
             spots = await loadSpots();
             renderList();
             renderMarkers();
