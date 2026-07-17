@@ -452,8 +452,13 @@ const db = getFirestore(app);
   const locationSearch = document.getElementById('locationSearch');
   const searchResults = document.getElementById('searchResults');
   function currentViewbox(){
-    // a rough +/-0.2 lat / +/-0.25 lon box around the current area, for the Nominatim fallback
-    return `${(areaLon-0.25).toFixed(4)},${(areaLat+0.2).toFixed(4)},${(areaLon+0.25).toFixed(4)},${(areaLat-0.2).toFixed(4)}`;
+    // a rough +/-0.3 lat / +/-0.4 lon box around the current area (~25-30mi), for the Nominatim fallback
+    return `${(areaLon-0.4).toFixed(4)},${(areaLat+0.3).toFixed(4)},${(areaLon+0.4).toFixed(4)},${(areaLat-0.3).toFixed(4)}`;
+  }
+
+  function currentPhotonBBox(){
+    // Photon expects minLon,minLat,maxLon,maxLat — same box, different order/format
+    return `${(areaLon-0.4).toFixed(4)},${(areaLat-0.3).toFixed(4)},${(areaLon+0.4).toFixed(4)},${(areaLat+0.3).toFixed(4)}`;
   }
 
   let searchTimer = null;
@@ -488,7 +493,7 @@ const db = getFirestore(app);
   }
 
   async function searchPhoton(query){
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&lat=${areaLat}&lon=${areaLon}&lang=en`;
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&lat=${areaLat}&lon=${areaLon}&bbox=${currentPhotonBBox()}&lang=en`;
     const res = await fetch(url);
     const data = await res.json();
     return (data.features || []).map(f => {
@@ -505,7 +510,7 @@ const db = getFirestore(app);
   }
 
   async function searchNominatim(query){
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&viewbox=${currentViewbox()}&bounded=0&q=${encodeURIComponent(query)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&viewbox=${currentViewbox()}&bounded=1&q=${encodeURIComponent(query)}`;
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
     const results = await res.json();
     return results.map(r => ({
