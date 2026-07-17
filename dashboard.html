@@ -321,6 +321,16 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 // Use the exact same config as index.html — must be the same Firebase project.
 const firebaseConfig = {
@@ -335,20 +345,28 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 
 (async function(){
   let areaLat = 32.8175;
   let areaLon = -97.4670;
   let areaName = 'Fort Worth · 76108';
   let STORAGE_KEY = 'spots-fort-worth-76108';
+  let currentUser = null;
+  let spots = [];
 
   // Auth guard: send anyone not logged in back to the landing page.
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     if(!user){
       window.location.href = 'index.html';
-    }else{
-      document.getElementById('whoName').textContent = user.displayName || user.email;
+      return;
     }
+    currentUser = user;
+    document.getElementById('whoName').textContent = user.displayName || user.email;
+    // Data depends on knowing who's logged in, so it loads only once auth resolves.
+    spots = await loadSpots();
+    renderList();
+    renderMarkers();
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -516,18 +534,37 @@ const auth = getAuth(app);
     }
   });
 
+  // Spots are stored in a single "spots" collection in Firestore, each document
+  // tagged with the owning user's uid and the current area, so queries only pull
+  // back that person's spots for whichever city is currently active.
   async function loadSpots(){
+    if(!currentUser) return [];
     try{
-      const res = await window.storage.get(STORAGE_KEY, true);
-      return res ? JSON.parse(res.value) : [];
-    }catch(e){ return []; }
-  }
-  async function saveSpots(spots){
-    try{ await window.storage.set(STORAGE_KEY, JSON.stringify(spots), true); }
-    catch(e){ console.error('storage save failed', e); }
+      const q = query(
+        collection(db, 'spots'),
+        where('userId', '==', currentUser.uid),
+        where('area', '==', STORAGE_KEY)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }catch(e){
+      console.error('Failed to load spots', e);
+      return [];
+    }
   }
 
-  let spots = await loadSpots();
+  async function addSpotToDb(spot){
+    const docRef = await addDoc(collection(db, 'spots'), {
+      ...spot,
+      userId: currentUser.uid,
+      area: STORAGE_KEY
+    });
+    return docRef.id;
+  }
+
+  async function deleteSpotFromDb(spotId){
+    await deleteDoc(doc(db, 'spots', spotId));
+  }
 
   function currentMood(){
     return {
@@ -582,8 +619,9 @@ const auth = getAuth(app);
     });
     listEl.querySelectorAll('.del').forEach(btn => {
       btn.addEventListener('click', async () => {
-        spots = spots.filter(s => s.id !== btn.dataset.id);
-        await saveSpots(spots);
+        const idToRemove = btn.dataset.id;
+        await deleteSpotFromDb(idToRemove);
+        spots = spots.filter(s => s.id !== idToRemove);
         renderList(); renderMarkers();
       });
     });
@@ -602,8 +640,7 @@ const auth = getAuth(app);
   document.getElementById('saveBtn').addEventListener('click', async () => {
     const name = document.getElementById('fName').value.trim();
     if(!name){ document.getElementById('fName').focus(); return; }
-    const spot = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    const spotData = {
       name,
       category: document.getElementById('fCategory').value,
       cost: +document.getElementById('fCost').value,
@@ -613,8 +650,8 @@ const auth = getAuth(app);
       lat: pendingLatLng ? pendingLatLng.lat : null,
       lng: pendingLatLng ? pendingLatLng.lng : null
     };
-    spots.push(spot);
-    await saveSpots(spots);
+    const newId = await addSpotToDb(spotData);
+    spots.push({ id: newId, ...spotData });
 
     document.getElementById('fName').value = '';
     document.getElementById('fNotes').value = '';
@@ -752,8 +789,6 @@ const auth = getAuth(app);
     }, 400);
   });
 
-  renderList();
-  renderMarkers();
 })();
 </script>
 </body>
