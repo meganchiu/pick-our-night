@@ -353,9 +353,18 @@ const db = getFirestore(app);
   let areaLat = 32.8175;
   let areaLon = -97.4670;
   let areaName = 'Fort Worth · 76108';
-  let STORAGE_KEY = 'spots-fort-worth-76108';
+  let STORAGE_KEY = 'spots-fort-worth-76108'; // original default — left as-is so existing data isn't orphaned
   let currentUser = null;
   let spots = [];
+
+  // Keys any newly-chosen area off its coordinates (rounded to a ~7mi grid) rather
+  // than the search text, so "Monterey Park" and "91754" — which resolve to nearly
+  // the same coordinates — land in the same bucket instead of two separate ones.
+  function areaStorageKey(lat, lon){
+    const gridLat = (Math.round(lat * 10) / 10).toFixed(1);
+    const gridLon = (Math.round(lon * 10) / 10).toFixed(1);
+    return `spots-grid-${gridLat}_${gridLon}`;
+  }
 
   // Auth guard: send anyone not logged in back to the landing page.
   onAuthStateChanged(auth, async (user) => {
@@ -813,7 +822,7 @@ const db = getFirestore(app);
             areaLat = item.lat;
             areaLon = item.lon;
             areaName = item.name;
-            STORAGE_KEY = `spots-${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+            STORAGE_KEY = areaStorageKey(item.lat, item.lon);
             updateAreaLabelUI();
             map.setView([areaLat, areaLon], 12);
             areaPanel.classList.remove('show');
