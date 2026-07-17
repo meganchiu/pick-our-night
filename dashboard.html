@@ -107,6 +107,30 @@
   .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .hint{ font-size:11px; color: var(--muted); margin-top:6px; }
 
+  .search-results{
+    position:relative; margin-top:4px; border-radius:8px; overflow:hidden;
+    background: var(--night-2); border:1px solid var(--line);
+  }
+  .search-results:empty{ display:none; border:none; }
+  .search-result{
+    padding: 9px 11px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--line);
+  }
+  .search-result:last-child{ border-bottom:none; }
+  .search-result:hover{ background: rgba(255,200,87,0.10); }
+  .search-result .sr-name{ font-weight:600; }
+  .search-result .sr-address{ font-size:11px; color: var(--muted); margin-top:2px; }
+  .search-loading, .search-empty{ padding: 9px 11px; font-size:12.5px; color: var(--muted); font-style:italic; }
+
+  .confirm-panel{
+    display:none; margin-top:8px; padding: 12px; border-radius:10px;
+    background: linear-gradient(145deg, rgba(255,93,143,0.12), rgba(255,200,87,0.06));
+    border:1px solid var(--line);
+  }
+  .confirm-panel.show{ display:block; }
+  .confirm-text{ font-size:12.5px; color: var(--text); margin-bottom:10px; line-height:1.4; }
+  .confirm-actions{ display:flex; gap:8px; }
+  .confirm-actions .btn{ flex:1; font-size:11px; padding:9px 12px; }
+
   #map{ height: 300px; border-radius:10px; overflow:hidden; border:1px solid var(--line); margin-top:4px; }
 
   .spot{
@@ -230,9 +254,21 @@
           <label>Notes (optional)</label>
           <textarea id="fNotes" placeholder="Why you two like it, best time to go, etc."></textarea>
         </div>
-        <div class="field">
-          <button class="btn secondary" id="pinBtn">📍 Click map to set location</button>
+        <div class="field" style="position:relative;">
+          <label>Location</label>
+          <input type="text" id="locationSearch" placeholder="Search a business or address (e.g. Fireside Pies Fort Worth)" autocomplete="off">
+          <div id="searchResults" class="search-results"></div>
+          <div class="confirm-panel" id="confirmPanel">
+            <div class="confirm-text" id="confirmText"></div>
+            <div class="confirm-actions">
+              <button class="btn pink" id="confirmLocationBtn" type="button">✓ Use this location</button>
+              <button class="btn secondary" id="cancelLocationBtn" type="button">Cancel</button>
+            </div>
+          </div>
           <div class="hint" id="pinHint">No location set — spot will still save, just won't show on the map.</div>
+          <div style="margin-top:8px;">
+            <button class="btn secondary" id="pinBtn" style="font-size:11px; padding:8px 12px;">📍 Or click the map to place a pin manually</button>
+          </div>
         </div>
         <button class="btn" id="saveBtn" style="width:100%">Save spot</button>
       </div>
@@ -319,25 +355,112 @@ const auth = getAuth(app);
   let placing = false;
   let pendingLatLng = null;
   let pendingMarker = null;
+  let candidateLatLng = null;
+  let candidateLabel = '';
+  let candidateMarker = null;
   const markers = {};
 
   const pinBtn = document.getElementById('pinBtn');
   const pinHint = document.getElementById('pinHint');
+  const confirmPanel = document.getElementById('confirmPanel');
+  const confirmText = document.getElementById('confirmText');
 
   pinBtn.addEventListener('click', () => {
     placing = !placing;
     pinBtn.classList.toggle('pin-active', placing);
-    pinHint.textContent = placing ? 'Click anywhere on the map to drop a pin.' : (pendingLatLng ? 'Location set.' : 'No location set — spot will still save, just won\'t show on the map.');
+    if(placing){ pinHint.textContent = 'Click anywhere on the map to drop a pin.'; }
+    else if(!pendingLatLng){ pinHint.textContent = 'No location set — spot will still save, just won\'t show on the map.'; }
   });
 
   map.on('click', (e) => {
     if(!placing) return;
-    pendingLatLng = e.latlng;
-    if(pendingMarker) map.removeLayer(pendingMarker);
-    pendingMarker = L.marker(pendingLatLng, {icon: pinIcon('#FFC857')}).addTo(map);
+    showCandidate(e.latlng.lat, e.latlng.lng, `Pin at ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`);
     placing = false;
     pinBtn.classList.remove('pin-active');
-    pinHint.textContent = `Location set at ${pendingLatLng.lat.toFixed(4)}, ${pendingLatLng.lng.toFixed(4)}.`;
+  });
+
+  // Shows a preview pin and asks the user to confirm before it's actually saved.
+  function showCandidate(lat, lng, label){
+    candidateLatLng = { lat, lng };
+    candidateLabel = label;
+    if(candidateMarker) map.removeLayer(candidateMarker);
+    candidateMarker = L.marker([lat, lng], {icon: pinIcon('#FFC857')}).addTo(map);
+    map.flyTo([lat, lng], 15, { duration: 0.6 });
+    confirmText.textContent = `Is this the right spot? ${label}`;
+    confirmPanel.classList.add('show');
+  }
+
+  document.getElementById('confirmLocationBtn').addEventListener('click', () => {
+    if(!candidateLatLng) return;
+    pendingLatLng = candidateLatLng;
+    if(pendingMarker) map.removeLayer(pendingMarker);
+    pendingMarker = L.marker([pendingLatLng.lat, pendingLatLng.lng], {icon: pinIcon('#FF5D8F')}).addTo(map);
+    if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
+    pinHint.textContent = `Location set: ${candidateLabel}`;
+    confirmPanel.classList.remove('show');
+  });
+
+  document.getElementById('cancelLocationBtn').addEventListener('click', () => {
+    if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
+    candidateLatLng = null;
+    confirmPanel.classList.remove('show');
+    locationSearchClear();
+  });
+
+  function locationSearchClear(){
+    locationSearch.value = '';
+    searchResults.innerHTML = '';
+  }
+
+  // ---------- Location search (free-text business/address search) ----------
+  // Uses OpenStreetMap's Nominatim geocoder, biased toward the Fort Worth / 76108 area.
+  const locationSearch = document.getElementById('locationSearch');
+  const searchResults = document.getElementById('searchResults');
+  const FW_VIEWBOX = '-97.7170,33.0175,-97.2170,32.6175'; // roughly the DFW/Fort Worth area
+
+  let searchTimer = null;
+  locationSearch.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = locationSearch.value.trim();
+    if(q.length < 3){
+      searchResults.innerHTML = '';
+      return;
+    }
+    searchResults.innerHTML = '<div class="search-loading">Searching…</div>';
+    searchTimer = setTimeout(() => runLocationSearch(q), 400);
+  });
+
+  async function runLocationSearch(query){
+    try{
+      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&viewbox=${FW_VIEWBOX}&bounded=0&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const results = await res.json();
+      if(!results.length){
+        searchResults.innerHTML = '<div class="search-empty">No matches — try a different search, or click the map to place a pin manually.</div>';
+        return;
+      }
+      searchResults.innerHTML = '';
+      results.forEach(r => {
+        const row = document.createElement('div');
+        row.className = 'search-result';
+        const mainName = r.name || r.display_name.split(',')[0];
+        row.innerHTML = `<div class="sr-name">${escapeHtml(mainName)}</div><div class="sr-address">${escapeHtml(r.display_name)}</div>`;
+        row.addEventListener('click', () => {
+          showCandidate(parseFloat(r.lat), parseFloat(r.lon), mainName);
+          locationSearch.value = mainName;
+          searchResults.innerHTML = '';
+        });
+        searchResults.appendChild(row);
+      });
+    }catch(e){
+      searchResults.innerHTML = '<div class="search-empty">Search failed — try again, or click the map to place a pin manually.</div>';
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    if(e.target !== locationSearch && !searchResults.contains(e.target)){
+      searchResults.innerHTML = '';
+    }
   });
 
   async function loadSpots(){
@@ -445,7 +568,12 @@ const auth = getAuth(app);
     document.getElementById('fEnergy').value = 50;
     document.getElementById('fSetting').value = 50;
     if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
+    if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
     pendingLatLng = null;
+    candidateLatLng = null;
+    confirmPanel.classList.remove('show');
+    locationSearch.value = '';
+    searchResults.innerHTML = '';
     pinHint.textContent = 'No location set — spot will still save, just won\'t show on the map.';
 
     renderList(); renderMarkers();
