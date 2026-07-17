@@ -1,6 +1,6 @@
 # Pick Our Night
 
-A "what should we do tonight?" recommendation engine for Fort Worth (76108) — weighted mood matching, a weighted spin-the-wheel matchmaker, and an interactive map of favorite spots.
+A "what should we do tonight?" recommendation engine for any city — weighted mood matching, a weighted spin-the-wheel matchmaker, and an interactive map of favorite spots.
 
 ## Files
 
