@@ -170,6 +170,7 @@
         <div style="display:flex;justify-content:flex-end"><span class="hi">Splurge</span></div>
       </div>
       <button class="btn pink" id="continueBtn" style="width:100%; margin-top:8px;">Continue →</button>
+      <button class="btn secondary" id="skipToSpinBtn" style="width:100%; margin-top:10px;">Skip straight to the matchmaker →</button>
     </div>
   </div>
 
@@ -341,6 +342,17 @@ const db = getFirestore(app);
     };
     sessionStorage.setItem('pon_mood', JSON.stringify(mood));
     window.location.href = 'plan.html';
+  });
+
+  // ---------- Skip straight to the matchmaker (still carries the mood over) ----------
+  document.getElementById('skipToSpinBtn').addEventListener('click', () => {
+    const mood = {
+      energy: +document.getElementById('moodEnergy').value,
+      setting: +document.getElementById('moodSetting').value,
+      budget: +document.getElementById('moodBudget').value
+    };
+    sessionStorage.setItem('pon_mood', JSON.stringify(mood));
+    window.location.href = 'spin.html';
   });
 })();
 </script>

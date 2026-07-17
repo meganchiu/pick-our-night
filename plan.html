@@ -193,26 +193,6 @@
   .result-card .r-match{ display:inline-block; margin-bottom:10px; font-family:'IBM Plex Mono',monospace; color: var(--amber); font-size:13px; }
   .result-card .r-notes{ color: var(--muted); font-size:14px; line-height:1.5; }
 
-  /* ---- Booking button (derived from the spot's category) ---- */
-  .r-book{ margin-top:16px; display:flex; flex-direction:column; gap:9px; }
-  .book-btn{
-    display:block; text-align:center; text-decoration:none;
-    font-family:'IBM Plex Mono',monospace; letter-spacing:.05em; font-weight:600;
-    font-size:13px; padding:13px 16px; border-radius:10px;
-    transition: transform .12s ease, box-shadow .12s ease;
-  }
-  .book-btn:hover{ transform: translateY(-1px); }
-  .book-primary{ background: var(--amber); color:#20200c; }
-  .book-primary:hover{ box-shadow:0 4px 14px rgba(255,200,87,.35); }
-  .book-tix{ background: var(--pink); color:#2a0c17; }
-  .book-tix:hover{ box-shadow:0 4px 14px rgba(255,93,143,.4); }
-  .book-dir{ background: transparent; color: var(--text); border:1px solid var(--line); }
-  .book-dir:hover{ border-color: var(--amber); color: var(--amber); }
-  .book-walkin{
-    text-align:center; font-family:'IBM Plex Mono',monospace; font-size:12px;
-    color:#7FE0C6; padding:11px; border:1px dashed rgba(127,224,198,.4); border-radius:10px;
-  }
-
   footer{ text-align:center; margin-top: 40px; font-size:11px; color: var(--muted); font-family:'IBM Plex Mono',monospace; }
 
   .loading-screen{
@@ -244,7 +224,8 @@
   <div class="hero">
     <div class="eyebrow" id="areaLabel">Fort Worth · 76108 <a id="changeAreaLink">(change)</a></div>
     <h1>Pick Our Night</h1>
-    <p>Here's the map, your favorite spots, and the spin — based on the mood you just set.</p>
+    <p>Here's the map and your favorite spots — based on the mood you just set.</p>
+    <p style="margin-top:10px;"><a href="spin.html" style="color:var(--amber); text-decoration:underline; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em;">Already have spots saved? Skip to matchmaking →</a></p>
     <div class="area-panel" id="areaPanel">
       <input type="text" id="areaSearch" placeholder="Search your city or neighborhood" autocomplete="off">
       <div id="areaResults" class="search-results"></div>
@@ -319,22 +300,9 @@
       <button class="btn" id="saveBtn" style="width:100%">Save spot</button>
     </div>
 
-    <div class="panel">
-      <h2><span class="dot"></span>The matchmaker</h2>
-      <div class="reel-wrap">
-        <div class="reel" id="reel"><div class="reel-text" id="reelText">— set your mood and spin —</div></div>
-        <button class="btn spin-btn" id="spinBtn">🎡 Spin the wheel</button>
-      </div>
-      <div class="result-card" id="resultCard">
-        <div class="r-cat" id="rCat"></div>
-        <h3 id="rName"></h3>
-        <div class="r-match" id="rMatch"></div>
-        <div class="r-notes" id="rNotes"></div>
-        <div class="r-book" id="rBook"></div>
-      </div>
-    </div>
+    <a class="btn spin-btn" href="spin.html" style="display:block; width:100%; text-align:center; text-decoration:none; margin-top:24px;">🎡 Go to the matchmaker →</a>
 
-    <button class="btn secondary" id="backToMoodBtn" style="width:100%; margin-top:32px;">← Back to mood</button>
+    <button class="btn secondary" id="backToMoodBtn" style="width:100%; margin-top:12px;">← Back to mood</button>
   </div>
 
   <footer>Signed in — spots are saved and shared with anyone else signed into this account.</footer>
@@ -765,96 +733,7 @@ const db = getFirestore(app);
     renderList(); renderMarkers();
   });
 
-  const reel = document.getElementById('reel');
-  const reelText = document.getElementById('reelText');
-  const spinBtn = document.getElementById('spinBtn');
-  const resultCard = document.getElementById('resultCard');
-
-  function weightedPick(mood){
-    const scored = spots.map(s => ({ spot: s, score: scoreSpot(s, mood) }));
-    const weights = scored.map(x => x.score * x.score);
-    const total = weights.reduce((a,b)=>a+b, 0);
-    let r = Math.random() * total;
-    for(let i=0;i<scored.length;i++){
-      r -= weights[i];
-      if(r <= 0) return scored[i];
-    }
-    return scored[scored.length-1];
-  }
-
-  spinBtn.addEventListener('click', () => {
-    if(spots.length === 0){
-      reelText.textContent = 'Add a spot first';
-      return;
-    }
-    resultCard.classList.remove('show');
-    reel.classList.add('spinning');
-    spinBtn.disabled = true;
-
-    const mood = currentMood();
-    const names = spots.map(s => s.name);
-    let ticks = 0;
-    const maxTicks = 22;
-    const interval = setInterval(() => {
-      reelText.textContent = names[Math.floor(Math.random()*names.length)];
-      ticks++;
-      if(ticks >= maxTicks){
-        clearInterval(interval);
-        reel.classList.remove('spinning');
-        const winner = weightedPick(mood);
-        reelText.textContent = winner.spot.name;
-        showResult(winner);
-        spinBtn.disabled = false;
-      }
-    }, 90 + ticks);
-  });
-
-  // ---------- Booking button ----------
-  // ▶ AFFILIATE TAG: once OpenTable / Viator approve you, paste your tracking
-  //   parameter here (e.g. "&ref=YOURID"). Empty = links work, just no commission yet.
-  const AFFILIATE_REF = '';
-
-  // Pull a usable city out of the area label: "Fort Worth · 76108" -> "Fort Worth",
-  // "Austin, Texas, United States" -> "Austin". Helps the booking search land locally.
-  function areaQuery(){
-    return (areaName || '').split('·')[0].split(',')[0].trim();
-  }
-
-  // Builds the right action for a spot based on its category. Restaurants reserve,
-  // activities/movies get tickets/showtimes, bars & coffee are walk-in. Everything
-  // gets a Directions button (uses the saved pin when there is one).
-  function bookingHtml(s){
-    const q = encodeURIComponent([s.name, areaQuery()].filter(Boolean).join(' '));
-    const dir = (s.lat != null && s.lng != null)
-      ? `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`
-      : `https://www.google.com/maps/search/?api=1&query=${q}`;
-
-    let primary;
-    if(s.category === 'Restaurant'){
-      primary = `<a class="book-btn book-primary" target="_blank" rel="noopener" href="https://www.opentable.com/s?term=${q}${AFFILIATE_REF}">🍽️ Reserve on OpenTable</a>`;
-    } else if(s.category === 'Activity'){
-      primary = `<a class="book-btn book-tix" target="_blank" rel="noopener" href="https://www.viator.com/searchResults/all?text=${q}${AFFILIATE_REF}">🎟️ Get tickets</a>`;
-    } else if(s.category === 'Movie'){
-      primary = `<a class="book-btn book-tix" target="_blank" rel="noopener" href="https://www.google.com/search?q=${q}%20showtimes%20tickets">🎬 Showtimes &amp; tickets</a>`;
-    } else { // Bar / Drinks, Coffee / Dessert
-      primary = `<div class="book-walkin">🚶 Walk-in friendly — no reservation needed</div>`;
-    }
-    return `${primary}<a class="book-btn book-dir" target="_blank" rel="noopener" href="${dir}">🧭 Directions</a>`;
-  }
-
-  function showResult(winner){
-    const s = winner.spot;
-    document.getElementById('rCat').textContent = s.category;
-    document.getElementById('rName').textContent = s.name;
-    document.getElementById('rMatch').textContent = `${winner.score}% match to tonight's mood`;
-    document.getElementById('rNotes').textContent = s.notes || 'No notes saved for this one yet.';
-    document.getElementById('rBook').innerHTML = bookingHtml(s);
-    resultCard.classList.add('show');
-    if(s.lat != null && markers[s.id]){
-      map.flyTo([s.lat, s.lng], 14, { duration: 0.8 });
-      markers[s.id].openPopup();
-    }
-  }
+  // The matchmaker (reel, spin, weighted pick, result) now lives on spin.html.
 
   // ---------- Area switching (so this works for any city, not just Fort Worth) ----------
   const areaLabel = document.getElementById('areaLabel');
