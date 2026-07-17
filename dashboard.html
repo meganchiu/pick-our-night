@@ -64,6 +64,15 @@
     line-height:1.1;
   }
   .hero p{ color: var(--muted); max-width: 560px; margin: 0 auto; font-size:14px; }
+  #areaLabel a{ color: var(--amber); cursor:pointer; text-decoration:underline; margin-left:6px; font-size:10.5px; }
+  .area-panel{
+    display:none; max-width:360px; margin: 14px auto 0; position:relative; text-align:left;
+  }
+  .area-panel.show{ display:block; }
+  .area-panel input{
+    width:100%; background: var(--night-2); border:1px solid var(--line); color: var(--text);
+    padding: 9px 11px; border-radius:8px; font-family:'Work Sans',sans-serif; font-size:14px;
+  }
 
   .grid{ display:grid; grid-template-columns: 1.05fr 1fr; gap: 22px; }
   @media (max-width: 880px){ .grid{ grid-template-columns: 1fr; } }
@@ -190,9 +199,13 @@
   </div>
 
   <div class="hero">
-    <div class="eyebrow">Fort Worth · 76108</div>
+    <div class="eyebrow" id="areaLabel">Fort Worth · 76108 <a id="changeAreaLink">(change)</a></div>
     <h1>Pick Our Night</h1>
     <p>Set the mood, log your favorite spots, and let the algorithm settle the "what should we do?" debate.</p>
+    <div class="area-panel" id="areaPanel">
+      <input type="text" id="areaSearch" placeholder="Search your city or neighborhood" autocomplete="off">
+      <div id="areaResults" class="search-results"></div>
+    </div>
   </div>
 
   <div class="grid">
@@ -324,8 +337,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 (async function(){
-  const STORAGE_KEY = 'spots-76108';
-  const CENTER = [32.8175, -97.4670];
+  let areaLat = 32.8175;
+  let areaLon = -97.4670;
+  let areaName = 'Fort Worth · 76108';
+  let STORAGE_KEY = 'spots-fort-worth-76108';
 
   // Auth guard: send anyone not logged in back to the landing page.
   onAuthStateChanged(auth, (user) => {
@@ -341,7 +356,7 @@ const auth = getAuth(app);
     window.location.href = 'index.html';
   });
 
-  const map = L.map('map', { scrollWheelZoom:false }).setView(CENTER, 12);
+  const map = L.map('map', { scrollWheelZoom:false }).setView([areaLat, areaLon], 12);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO',
     maxZoom: 19
@@ -418,9 +433,10 @@ const auth = getAuth(app);
   // straightforward addresses Photon doesn't have. Both are free, no API key.
   const locationSearch = document.getElementById('locationSearch');
   const searchResults = document.getElementById('searchResults');
-  const FW_CENTER_LAT = 32.8175;
-  const FW_CENTER_LON = -97.4670;
-  const FW_VIEWBOX = '-97.7170,33.0175,-97.2170,32.6175'; // roughly the DFW/Fort Worth area, for the Nominatim fallback
+  function currentViewbox(){
+    // a rough +/-0.2 lat / +/-0.25 lon box around the current area, for the Nominatim fallback
+    return `${(areaLon-0.25).toFixed(4)},${(areaLat+0.2).toFixed(4)},${(areaLon+0.25).toFixed(4)},${(areaLat-0.2).toFixed(4)}`;
+  }
 
   let searchTimer = null;
   locationSearch.addEventListener('input', () => {
@@ -454,7 +470,7 @@ const auth = getAuth(app);
   }
 
   async function searchPhoton(query){
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&lat=${FW_CENTER_LAT}&lon=${FW_CENTER_LON}&lang=en`;
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&lat=${areaLat}&lon=${areaLon}&lang=en`;
     const res = await fetch(url);
     const data = await res.json();
     return (data.features || []).map(f => {
@@ -471,7 +487,7 @@ const auth = getAuth(app);
   }
 
   async function searchNominatim(query){
-    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&viewbox=${FW_VIEWBOX}&bounded=0&q=${encodeURIComponent(query)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&viewbox=${currentViewbox()}&bounded=0&q=${encodeURIComponent(query)}`;
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
     const results = await res.json();
     return results.map(r => ({
@@ -672,6 +688,69 @@ const auth = getAuth(app);
       markers[s.id].openPopup();
     }
   }
+
+  // ---------- Area switching (so this works for any city, not just Fort Worth) ----------
+  const areaLabel = document.getElementById('areaLabel');
+  const changeAreaLink = document.getElementById('changeAreaLink');
+  const areaPanel = document.getElementById('areaPanel');
+  const areaSearchInput = document.getElementById('areaSearch');
+  const areaResults = document.getElementById('areaResults');
+
+  changeAreaLink.addEventListener('click', () => {
+    areaPanel.classList.toggle('show');
+    if(areaPanel.classList.contains('show')) areaSearchInput.focus();
+  });
+
+  let areaSearchTimer = null;
+  areaSearchInput.addEventListener('input', () => {
+    clearTimeout(areaSearchTimer);
+    const q = areaSearchInput.value.trim();
+    if(q.length < 3){ areaResults.innerHTML = ''; return; }
+    areaResults.innerHTML = '<div class="search-loading">Searching…</div>';
+    areaSearchTimer = setTimeout(async () => {
+      try{
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=en&osm_tag=place`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const items = (data.features || []).map(f => {
+          const p = f.properties;
+          const name = [p.name, p.state, p.country].filter(Boolean).join(', ');
+          return { name, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+        });
+        if(!items.length){
+          areaResults.innerHTML = '<div class="search-empty">No matches — try a broader search (just the city name).</div>';
+          return;
+        }
+        areaResults.innerHTML = '';
+        items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'search-result';
+          row.innerHTML = `<div class="sr-name">${escapeHtml(item.name)}</div>`;
+          row.addEventListener('click', async () => {
+            areaLat = item.lat;
+            areaLon = item.lon;
+            areaName = item.name;
+            STORAGE_KEY = `spots-${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+            areaLabel.innerHTML = `${escapeHtml(areaName)} <a id="changeAreaLink">(change)</a>`;
+            document.getElementById('changeAreaLink').addEventListener('click', () => {
+              areaPanel.classList.toggle('show');
+              if(areaPanel.classList.contains('show')) areaSearchInput.focus();
+            });
+            map.setView([areaLat, areaLon], 12);
+            areaPanel.classList.remove('show');
+            areaSearchInput.value = '';
+            areaResults.innerHTML = '';
+            spots = await loadSpots();
+            renderList();
+            renderMarkers();
+          });
+          areaResults.appendChild(row);
+        });
+      }catch(e){
+        areaResults.innerHTML = '<div class="search-empty">Search failed — try again.</div>';
+      }
+    }, 400);
+  });
 
   renderList();
   renderMarkers();
