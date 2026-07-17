@@ -254,11 +254,13 @@
     return ZIP_COORDS[zip] || null;
   }
 
-  /* Real distance when we can (origin + venue coords); else the sample fallback. */
+  /* Real distance when we can (origin + venue coords); else the sample fallback.
+     Returns null when distance is genuinely unknown — such venues are NOT filtered
+     out by radius, so a freshly added venue (no distance/coords yet) still shows up. */
   function effectiveDistance(v, origin){
     if(origin && typeof v.lat==="number" && typeof v.lng==="number")
       return haversineMiles(origin, { lat:v.lat, lng:v.lng });
-    return v.distance;
+    return (typeof v.distance==="number") ? v.distance : null;
   }
 
   /* ---- mood labels ---- */
@@ -302,7 +304,8 @@
     document.getElementById("tag").textContent=v.tag;
     document.getElementById("matchBadge").textContent=matchPct+"% match";
     document.getElementById("vname").textContent=v.name;
-    document.getElementById("vmeta").textContent=v.type + " · " + priceStr(v.price) + " · " + distMi.toFixed(1) + " mi away";
+    const distText=(typeof distMi==="number") ? " · " + distMi.toFixed(1) + " mi away" : "";
+    document.getElementById("vmeta").textContent=v.type + " · " + priceStr(v.price) + distText;
     meter(document.getElementById("mEnergy"),v.energy);
     meter(document.getElementById("mAmb"),v.ambiance);
     meter(document.getElementById("mPrice"),v.price);
@@ -345,7 +348,9 @@
     const radius=+document.getElementById("radius").value;
     const origin=await geocodeZip(getZip());                             // real coords, or null
     const ranked=VENUES.map(v=>({ ...v, _dist: effectiveDistance(v, origin) }));
-    const pool=ranked.filter(v=>v._dist<=radius);
+    // Keep venues with a known distance within the radius, PLUS any whose distance
+    // is still unknown (e.g. just added, no coords yet) — so they're never hidden.
+    const pool=ranked.filter(v=> v._dist===null || v._dist<=radius);
     if(!pool.length){ showMessage("No spots within " + radius + " mi — try widening your radius."); return; }
     const t=moodTarget();
     let pick=weightedPick(pool,t);
