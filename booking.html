@@ -16,9 +16,12 @@
     a bookingType, and a distance (miles from the set location).
   ▶ DEFAULT ZIP:    set DEFAULT_ZIP (③) or leave "" so visitors type their own.
 
-  NOTE ON DISTANCE: the `distance` on each venue is sample data. In production you'd
-  compute it from the ZIP's coordinates to each venue's coordinates (geocoding). The
-  radius *filtering logic* here is real — swap in real distances and it just works.
+  DISTANCE MATH: real haversine (point-to-point) distance is now built in. Give each
+  venue a lat/lng and a geocoder that turns the typed ZIP into coordinates (geocodeZip
+  below) and the "X mi away" label + radius filter become fully real. Sample coords for
+  a few ZIPs are included so you can see it working NOW — try ZIP 76108. Unknown ZIPs
+  fall back to each venue's sample `distance`. Swap geocodeZip's table for a real API
+  (e.g. free OpenStreetMap) for full coverage — it's already awaited, so async drops in.
 -->
 <html lang="en">
 <head>
@@ -193,23 +196,29 @@
        distance: miles from the set location (sample data — see note at top)
        walk-in spots: add phone + website so Call/Menu work. */
   const VENUES = [
-    { name:"Emilia's Trattoria", type:"Italian", price:3, energy:2, ambiance:4, distance:1.2,
+    { name:"Emilia's Trattoria", type:"Italian", price:3, energy:2, ambiance:4,
+      lat:32.7700, lng:-97.4560, distance:1.2,
       bookingType:"opentable", hero:"linear-gradient(135deg,#7a3b52,#3a1f30)", tag:"🍝 Cozy dinner" },
 
-    { name:"Lantana Rooftop", type:"Small plates & wine", price:3, energy:3, ambiance:5, distance:3.4,
+    { name:"Lantana Rooftop", type:"Small plates & wine", price:3, energy:3, ambiance:5,
+      lat:32.7550, lng:-97.4300, distance:3.4,
       bookingType:"opentable", hero:"linear-gradient(135deg,#5a4a86,#2a1f40)", tag:"🍷 Date-night classic" },
 
-    { name:"Cutthroat Axe Co.", type:"Axe throwing", price:2, energy:5, ambiance:3, distance:6.1,
+    { name:"Cutthroat Axe Co.", type:"Axe throwing", price:2, energy:5, ambiance:3,
+      lat:32.8180, lng:-97.5200, distance:6.1,
       bookingType:"experience", hero:"linear-gradient(135deg,#b0552f,#3a2418)", tag:"🪓 Something different" },
 
-    { name:"Trinity River Kayak Tour", type:"Sunset paddle", price:2, energy:4, ambiance:4, distance:9.5,
+    { name:"Trinity River Kayak Tour", type:"Sunset paddle", price:2, energy:4, ambiance:4,
+      lat:32.7050, lng:-97.3850, distance:9.5,
       bookingType:"experience", hero:"linear-gradient(135deg,#2f7d6b,#173a33)", tag:"🚣 Adventure" },
 
-    { name:"The Usual", type:"Cocktail bar", price:2, energy:4, ambiance:5, distance:0.6,
+    { name:"The Usual", type:"Cocktail bar", price:2, energy:4, ambiance:5,
+      lat:32.7790, lng:-97.4610, distance:0.6,
       bookingType:"walkin", hero:"linear-gradient(135deg,#4a3a6b,#241a33)", tag:"🍸 Nightcap",
       phone:"+18175550142", website:"https://example.com/the-usual" },
 
-    { name:"Moonlit Scoops", type:"Dessert & coffee", price:1, energy:2, ambiance:3, distance:2.1,
+    { name:"Moonlit Scoops", type:"Dessert & coffee", price:1, energy:2, ambiance:3,
+      lat:32.7880, lng:-97.4520, distance:2.1,
       bookingType:"walkin", hero:"linear-gradient(135deg,#8a5a3f,#3a2418)", tag:"🍦 Sweet stop",
       phone:"+18175550188", website:"https://example.com/moonlit-scoops" },
   ];
@@ -222,6 +231,35 @@
   function openTableURL(v){ return "https://www.opentable.com/s?term=" + encodeURIComponent(v.name + locSuffix()) + AFFILIATE_REF; }
   function experienceURL(v){ return "https://www.viator.com/searchResults/all?text=" + encodeURIComponent(v.name + locSuffix()) + AFFILIATE_REF; }
   function directionsURL(v){ return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v.name + locSuffix()); }
+
+  /* ---- real distance math (haversine: true miles between two coordinates) ---- */
+  function haversineMiles(a, b){
+    const toRad=d=>d*Math.PI/180, R=3958.8; // earth radius, miles
+    const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+    const h=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+
+  /* Sample ZIP -> coordinates so you can see real distances now (try "76108").
+     ▶ PLUG IN REAL GEOCODING: replace this table with a live lookup, e.g. free
+       OpenStreetMap Nominatim (geocodeZip is already awaited, so async fits):
+         const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&country=us&postalcode=${zip}`);
+         const j = await r.json(); return j.length ? { lat:+j[0].lat, lng:+j[0].lon } : null; */
+  const ZIP_COORDS = {
+    "76108": { lat:32.7757, lng:-97.4670 },  // west Fort Worth
+    "76102": { lat:32.7555, lng:-97.3308 },  // downtown Fort Worth
+    "78701": { lat:30.2711, lng:-97.7437 },  // Austin (far away -> shows filtering)
+  };
+  async function geocodeZip(zip){
+    return ZIP_COORDS[zip] || null;
+  }
+
+  /* Real distance when we can (origin + venue coords); else the sample fallback. */
+  function effectiveDistance(v, origin){
+    if(origin && typeof v.lat==="number" && typeof v.lng==="number")
+      return haversineMiles(origin, { lat:v.lat, lng:v.lng });
+    return v.distance;
+  }
 
   /* ---- mood labels ---- */
   const ENERGY=["","Chill","Mellow","Balanced","Buzzy","Lively"];
@@ -257,14 +295,14 @@
   function meter(el,n){ el.innerHTML=""; for(let i=0;i<5;i++){ const b=document.createElement("i"); if(i<n)b.className="on"; el.appendChild(b);} }
   function sbtn(icon,label,href){ return '<a class="sbtn" href="'+href+'" target="_blank" rel="noopener"><span class="ic">'+icon+'</span>'+label+'</a>'; }
 
-  function render(v, matchPct){
+  function render(v, matchPct, distMi){
     document.getElementById("msg").style.display="none";
     const card=document.getElementById("card"); card.style.display="block";
     document.getElementById("hero").style.background=v.hero;
     document.getElementById("tag").textContent=v.tag;
     document.getElementById("matchBadge").textContent=matchPct+"% match";
     document.getElementById("vname").textContent=v.name;
-    document.getElementById("vmeta").textContent=v.type + " · " + priceStr(v.price) + " · " + v.distance + " mi away";
+    document.getElementById("vmeta").textContent=v.type + " · " + priceStr(v.price) + " · " + distMi.toFixed(1) + " mi away";
     meter(document.getElementById("mEnergy"),v.energy);
     meter(document.getElementById("mAmb"),v.ambiance);
     meter(document.getElementById("mPrice"),v.price);
@@ -302,16 +340,18 @@
   document.getElementById("zip").value=DEFAULT_ZIP;
   updateLabels();
 
-  let last=null;
-  document.getElementById("spin").addEventListener("click",()=>{
+  let lastName=null;
+  document.getElementById("spin").addEventListener("click", async ()=>{
     const radius=+document.getElementById("radius").value;
-    const pool=VENUES.filter(v=>v.distance<=radius);
+    const origin=await geocodeZip(getZip());                             // real coords, or null
+    const ranked=VENUES.map(v=>({ ...v, _dist: effectiveDistance(v, origin) }));
+    const pool=ranked.filter(v=>v._dist<=radius);
     if(!pool.length){ showMessage("No spots within " + radius + " mi — try widening your radius."); return; }
     const t=moodTarget();
     let pick=weightedPick(pool,t);
-    if(pool.length>1 && pick.v===last){ pick=weightedPick(pool,t); } // light nudge away from a repeat
-    last=pick.v;
-    render(pick.v, Math.round(pick.match*100));
+    if(pool.length>1 && pick.v.name===lastName){ pick=weightedPick(pool,t); } // light nudge away from a repeat
+    lastName=pick.v.name;
+    render(pick.v, Math.round(pick.match*100), pick.v._dist);
   });
 </script>
 </body>
