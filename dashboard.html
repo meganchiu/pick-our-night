@@ -269,16 +269,40 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+// Use the exact same config as index.html — must be the same Firebase project.
+const firebaseConfig = {
+  apiKey: "AIzaSyCaRo7wJHEw2gXIDMhgbcxTvgzV1CcfDeQ",
+  authDomain: "pick-our-night.firebaseapp.com",
+  projectId: "pick-our-night",
+  storageBucket: "pick-our-night.firebasestorage.app",
+  messagingSenderId: "595479555026",
+  appId: "1:595479555026:web:60b31e8624c4c12752360b",
+  measurementId: "G-VMFQZJPQRD"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
 (async function(){
   const STORAGE_KEY = 'spots-76108';
   const CENTER = [32.8175, -97.4670];
 
-  // NOTE: "logged in" state here is a visual placeholder (no real backend yet).
-  // Once real auth (e.g. Supabase) is wired in, swap this for the actual user's name
-  // and route unauthenticated visitors to landing.html automatically.
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    window.location.href = 'landing.html';
+  // Auth guard: send anyone not logged in back to the landing page.
+  onAuthStateChanged(auth, (user) => {
+    if(!user){
+      window.location.href = 'index.html';
+    }else{
+      document.getElementById('whoName').textContent = user.displayName || user.email;
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await signOut(auth);
+    window.location.href = 'index.html';
   });
 
   const map = L.map('map', { scrollWheelZoom:false }).setView(CENTER, 12);

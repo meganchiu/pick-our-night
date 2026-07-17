@@ -147,11 +147,12 @@
     <button class="close" data-close>×</button>
     <h2>Welcome back</h2>
     <div class="sub">Log in to see tonight's picks.</div>
-    <div class="field"><label>Email</label><input type="email" placeholder="you@example.com"></div>
-    <div class="field"><label>Password</label><input type="password" placeholder="••••••••"></div>
-    <button class="btn pink">Log in</button>
+    <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
+    <button class="btn pink" id="loginSubmit">Log in</button>
+    <div class="switch" style="margin-top:12px;"><a id="forgotPassword">Forgot password?</a></div>
     <div class="switch">No account yet? <a data-swap-to="signup">Sign up</a></div>
-    <div class="note">This form is a visual placeholder — it isn't connected to a real account system yet.</div>
+    <div class="note" id="loginError" style="color:var(--pink); display:none;"></div>
   </div>
 </div>
 
@@ -161,16 +162,43 @@
     <button class="close" data-close>×</button>
     <h2>Create your account</h2>
     <div class="sub">Set up Pick Our Night for you two.</div>
-    <div class="field"><label>Name</label><input type="text" placeholder="Your name"></div>
-    <div class="field"><label>Email</label><input type="email" placeholder="you@example.com"></div>
-    <div class="field"><label>Password</label><input type="password" placeholder="••••••••"></div>
-    <button class="btn">Sign up</button>
+    <div class="field"><label>Name</label><input type="text" id="signupName" placeholder="Your name"></div>
+    <div class="field"><label>Email</label><input type="email" id="signupEmail" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="signupPassword" placeholder="•••••••• (6+ characters)"></div>
+    <button class="btn" id="signupSubmit">Sign up</button>
     <div class="switch">Already have an account? <a data-swap-to="login">Log in</a></div>
-    <div class="note">This form is a visual placeholder — it isn't connected to a real account system yet.</div>
+    <div class="note" id="signupError" style="color:var(--pink); display:none;"></div>
   </div>
 </div>
 
-<script>
+<script type="module">
+  // ---------- Firebase setup ----------
+  // 1. Create a project at https://console.firebase.google.com
+  // 2. Build > Authentication > Get started > enable "Email/Password"
+  // 3. Project settings > General > "Your apps" > web app > copy the config below
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    sendPasswordResetEmail,
+    updateProfile
+  } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCaRo7wJHEw2gXIDMhgbcxTvgzV1CcfDeQ",
+    authDomain: "pick-our-night.firebaseapp.com",
+    projectId: "pick-our-night",
+    storageBucket: "pick-our-night.firebasestorage.app",
+    messagingSenderId: "595479555026",
+    appId: "1:595479555026:web:60b31e8624c4c12752360b",
+    measurementId: "G-VMFQZJPQRD"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  // ---------- Modal show/hide (unchanged) ----------
   const loginOverlay = document.getElementById('loginOverlay');
   const signupOverlay = document.getElementById('signupOverlay');
 
@@ -195,6 +223,81 @@
       show(a.dataset.swapTo === 'signup' ? signupOverlay : loginOverlay);
     });
   });
+
+  function showError(el, message){
+    el.textContent = message;
+    el.style.display = 'block';
+  }
+  function clearError(el){
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
+  // ---------- Log in ----------
+  const loginError = document.getElementById('loginError');
+  document.getElementById('loginSubmit').addEventListener('click', async () => {
+    clearError(loginError);
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if(!email || !password){
+      showError(loginError, 'Enter both email and password.');
+      return;
+    }
+    try{
+      await signInWithEmailAndPassword(auth, email, password);
+      window.location.href = 'dashboard.html';
+    }catch(err){
+      showError(loginError, friendlyError(err));
+    }
+  });
+
+  // ---------- Sign up ----------
+  const signupError = document.getElementById('signupError');
+  document.getElementById('signupSubmit').addEventListener('click', async () => {
+    clearError(signupError);
+    const name = document.getElementById('signupName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    if(!email || !password){
+      showError(signupError, 'Enter both email and password.');
+      return;
+    }
+    try{
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if(name){ await updateProfile(cred.user, { displayName: name }); }
+      window.location.href = 'dashboard.html';
+    }catch(err){
+      showError(signupError, friendlyError(err));
+    }
+  });
+
+  // ---------- Forgot password ----------
+  document.getElementById('forgotPassword').addEventListener('click', async () => {
+    clearError(loginError);
+    const email = document.getElementById('loginEmail').value.trim();
+    if(!email){
+      showError(loginError, 'Enter your email above first, then click "Forgot password?"');
+      return;
+    }
+    try{
+      await sendPasswordResetEmail(auth, email);
+      showError(loginError, 'Check your email for a password reset link.');
+      loginError.style.color = 'var(--amber)';
+    }catch(err){
+      showError(loginError, friendlyError(err));
+      loginError.style.color = 'var(--pink)';
+    }
+  });
+
+  function friendlyError(err){
+    const code = err.code || '';
+    if(code.includes('email-already-in-use')) return 'That email already has an account — try logging in instead.';
+    if(code.includes('invalid-email')) return 'That email address doesn\'t look right.';
+    if(code.includes('weak-password')) return 'Password should be at least 6 characters.';
+    if(code.includes('user-not-found') || code.includes('wrong-password') || code.includes('invalid-credential')) return 'Email or password is incorrect.';
+    if(code.includes('too-many-requests')) return 'Too many attempts — try again in a bit.';
+    return 'Something went wrong. Please try again.';
+  }
 </script>
 </body>
 </html>
