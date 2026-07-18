@@ -324,6 +324,7 @@
         <h3 id="rName"></h3>
         <div class="r-match" id="rMatch"></div>
         <div class="r-notes" id="rNotes"></div>
+        <a class="btn secondary" id="directionsLink" href="#" target="_blank" rel="noopener" style="display:none; margin-top:12px; font-size:11px; padding:8px 13px;">Directions ↗</a>
       </div>
     </div>
 
@@ -902,18 +903,43 @@ const db = getFirestore(app);
     }, 90 + ticks);
   });
 
+  let currentResultSpot = null;
+
   function showResult(winner){
     const s = winner.spot;
+    currentResultSpot = s;
     document.getElementById('rCat').textContent = s.category;
     document.getElementById('rName').textContent = s.name;
     document.getElementById('rMatch').textContent = `${winner.score}% match to tonight's mood`;
     document.getElementById('rNotes').textContent = s.notes || 'No notes saved for this one yet.';
+    document.getElementById('directionsLink').style.display = s.lat != null ? 'inline-flex' : 'none';
     resultCard.classList.add('show');
     if(s.lat != null && markers[s.id]){
       map.flyTo([s.lat, s.lng], 14, { duration: 0.8 });
       markers[s.id].openPopup();
     }
   }
+
+  // Opens Google Maps directions from the user's current location to the
+  // spot's saved pin. Falls back to a destination-only link (letting Google
+  // Maps use its own location detection) if geolocation is denied or fails.
+  document.getElementById('directionsLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    if(!currentResultSpot || currentResultSpot.lat == null) return;
+    const dest = `${currentResultSpot.lat},${currentResultSpot.lng}`;
+    const openWithOrigin = (originLat, originLng) => {
+      const origin = originLat != null ? `&origin=${originLat},${originLng}` : '';
+      window.open(`https://www.google.com/maps/dir/?api=1${origin}&destination=${dest}&travelmode=driving`, '_blank', 'noopener');
+    };
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        (pos) => openWithOrigin(pos.coords.latitude, pos.coords.longitude),
+        () => openWithOrigin(null, null)
+      );
+    }else{
+      openWithOrigin(null, null);
+    }
+  });
 
   // ---------- Area switching (so this works for any city, not just Fort Worth) ----------
   const areaLabel = document.getElementById('areaLabel');
