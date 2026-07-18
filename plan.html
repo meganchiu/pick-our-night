@@ -273,8 +273,8 @@
           </select>
         </div>
         <div class="field">
-          <label>Cost</label>
-          <select id="fCost">
+          <label>Budget</label>
+          <select id="fBudget">
             <option value="10">$ Free / cheap</option>
             <option value="50" selected>$$ Moderate</option>
             <option value="90">$$$ Splurge</option>
@@ -676,7 +676,7 @@ const db = getFirestore(app);
   function scoreSpot(spot, mood){
     const dE = Math.abs(spot.energy - mood.energy);
     const dS = Math.abs(spot.setting - mood.setting);
-    const dB = Math.abs(spot.cost - mood.budget);
+    const dB = Math.abs((spot.budget ?? spot.cost) - mood.budget);
     const avgDiff = (dE + dS + dB) / 3;
     return Math.max(2, Math.round(100 - avgDiff));
   }
@@ -766,7 +766,7 @@ const db = getFirestore(app);
     document.getElementById('fEnergy').value = 50;
     document.getElementById('fSetting').value = 50;
     document.getElementById('fCategory').selectedIndex = 0;
-    document.getElementById('fCost').value = '50';
+    document.getElementById('fBudget').value = '50';
     if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
     if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
     pendingLatLng = null;
@@ -796,7 +796,7 @@ const db = getFirestore(app);
     editingSpotId = spot.id;
     document.getElementById('fName').value = spot.name;
     document.getElementById('fCategory').value = spot.category;
-    document.getElementById('fCost').value = String(spot.cost);
+    document.getElementById('fBudget').value = String(spot.budget ?? spot.cost);
     document.getElementById('fEnergy').value = spot.energy;
     document.getElementById('fSetting').value = spot.setting;
     document.getElementById('fNotes').value = spot.notes || '';
@@ -833,7 +833,7 @@ const db = getFirestore(app);
     const spotData = {
       name,
       category: document.getElementById('fCategory').value,
-      cost: +document.getElementById('fCost').value,
+      budget: +document.getElementById('fBudget').value,
       energy: +document.getElementById('fEnergy').value,
       setting: +document.getElementById('fSetting').value,
       notes: document.getElementById('fNotes').value.trim(),
