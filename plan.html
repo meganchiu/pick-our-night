@@ -224,8 +224,7 @@
   <div class="hero">
     <div class="eyebrow" id="areaLabel">Fort Worth · 76108 <a id="changeAreaLink">(change)</a></div>
     <h1>Pick Our Night</h1>
-    <p>Here's the map and your favorite spots — based on the mood you just set.</p>
-    <p style="margin-top:10px;"><a href="spin.html" style="color:var(--amber); text-decoration:underline; font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.05em;">Already have spots saved? Skip to matchmaking →</a></p>
+    <p>Here's the map, your favorite spots, and the spin — based on the mood you just set.</p>
     <div class="area-panel" id="areaPanel">
       <input type="text" id="areaSearch" placeholder="Search your city or neighborhood" autocomplete="off">
       <div id="areaResults" class="search-results"></div>
@@ -243,8 +242,8 @@
       </div>
     </div>
 
-    <div class="panel">
-      <h2><span class="dot"></span>Add a favorite spot</h2>
+    <div class="panel" id="addSpotPanel">
+      <h2><span class="dot"></span><span id="addSpotHeading">Add a favorite spot</span></h2>
       <div class="field">
         <label>Name</label>
         <input type="text" id="fName" placeholder="e.g. Fireside Pies, AMC Parks at Rockwall, River Trail Walk">
@@ -298,11 +297,24 @@
         </div>
       </div>
       <button class="btn" id="saveBtn" style="width:100%">Save spot</button>
+      <a id="cancelEditLink" style="display:none; text-align:center; margin-top:10px; font-size:12px; color:var(--muted); cursor:pointer; text-decoration:underline;">Cancel edit</a>
     </div>
 
-    <a class="btn spin-btn" href="spin.html" style="display:block; width:100%; text-align:center; text-decoration:none; margin-top:24px;">🎡 Go to the matchmaker →</a>
+    <div class="panel">
+      <h2><span class="dot"></span>The matchmaker</h2>
+      <div class="reel-wrap">
+        <div class="reel" id="reel"><div class="reel-text" id="reelText">— set your mood and spin —</div></div>
+        <button class="btn spin-btn" id="spinBtn">🎡 Spin the wheel</button>
+      </div>
+      <div class="result-card" id="resultCard">
+        <div class="r-cat" id="rCat"></div>
+        <h3 id="rName"></h3>
+        <div class="r-match" id="rMatch"></div>
+        <div class="r-notes" id="rNotes"></div>
+      </div>
+    </div>
 
-    <button class="btn secondary" id="backToMoodBtn" style="width:100%; margin-top:12px; border-radius:30px; padding:14px;">← Back to mood</button>
+    <button class="btn secondary" id="backToMoodBtn" style="width:100%; margin-top:4px;">← Back to mood</button>
   </div>
 
   <footer>Signed in — spots are saved and shared with anyone else signed into this account.</footer>
@@ -316,6 +328,7 @@ import {
   getFirestore,
   collection,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   query,
@@ -458,6 +471,7 @@ const db = getFirestore(app);
   let candidateLatLng = null;
   let candidateLabel = '';
   let candidateMarker = null;
+  let editingSpotId = null;
   const markers = {};
 
   const pinBtn = document.getElementById('pinBtn');
@@ -634,6 +648,10 @@ const db = getFirestore(app);
     return docRef.id;
   }
 
+  async function updateSpotInDb(spotId, spot){
+    await updateDoc(doc(db, 'spots', spotId), spot);
+  }
+
   async function deleteSpotFromDb(spotId){
     await deleteDoc(doc(db, 'spots', spotId));
   }
@@ -681,11 +699,12 @@ const db = getFirestore(app);
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="fit">${fit}% fit</div>
-          <button class="del" data-id="${s.id}" title="Remove">✕</button>
+          <button class="del" data-id="${s.id}" data-action="edit" title="Edit">✎</button>
+          <button class="del" data-id="${s.id}" data-action="delete" title="Remove">✕</button>
         </div>`;
       listEl.appendChild(row);
     });
-    listEl.querySelectorAll('.del').forEach(btn => {
+    listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const idToRemove = btn.dataset.id;
         await deleteSpotFromDb(idToRemove);
@@ -693,7 +712,76 @@ const db = getFirestore(app);
         renderList(); renderMarkers();
       });
     });
+    listEl.querySelectorAll('[data-action="edit"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const spotToEdit = spots.find(s => s.id === btn.dataset.id);
+        if(spotToEdit) startEditingSpot(spotToEdit);
+      });
+    });
   }
+
+  const addSpotHeading = document.getElementById('addSpotHeading');
+  const cancelEditLink = document.getElementById('cancelEditLink');
+  const saveBtn = document.getElementById('saveBtn');
+
+  function resetSpotForm(){
+    document.getElementById('fName').value = '';
+    document.getElementById('fNotes').value = '';
+    document.getElementById('fEnergy').value = 50;
+    document.getElementById('fSetting').value = 50;
+    document.getElementById('fCategory').selectedIndex = 0;
+    document.getElementById('fCost').value = '50';
+    if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
+    if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
+    pendingLatLng = null;
+    candidateLatLng = null;
+    confirmPanel.classList.remove('show');
+    locationSearch.value = '';
+    searchResults.innerHTML = '';
+    pinHint.textContent = 'No location set — spot will still save, just won\'t show on the map.';
+  }
+
+  function exitEditMode(){
+    editingSpotId = null;
+    addSpotHeading.textContent = 'Add a favorite spot';
+    saveBtn.textContent = 'Save spot';
+    cancelEditLink.style.display = 'none';
+    resetSpotForm();
+  }
+
+  // Collapses the saved-spots dropdown, fills the form with this spot's data,
+  // and switches the form into "editing" mode so Save updates it instead of
+  // creating a new one.
+  function startEditingSpot(spot){
+    spotsCollapse.classList.remove('show');
+    toggleSpotsBtn.innerHTML = `Your spots (<span id="spotCount">${spots.length}</span>) ▼`;
+
+    editingSpotId = spot.id;
+    document.getElementById('fName').value = spot.name;
+    document.getElementById('fCategory').value = spot.category;
+    document.getElementById('fCost').value = String(spot.cost);
+    document.getElementById('fEnergy').value = spot.energy;
+    document.getElementById('fSetting').value = spot.setting;
+    document.getElementById('fNotes').value = spot.notes || '';
+
+    if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
+    if(spot.lat != null){
+      pendingLatLng = { lat: spot.lat, lng: spot.lng };
+      pendingMarker = L.marker([spot.lat, spot.lng], {icon: pinIcon('#FF5D8F')}).addTo(map);
+      pinHint.textContent = 'Current location kept — search above only if you want to change it.';
+    }else{
+      pendingLatLng = null;
+      pinHint.textContent = 'No location set — search above to add one.';
+    }
+
+    addSpotHeading.textContent = 'Edit existing spot';
+    saveBtn.textContent = 'Save changes';
+    cancelEditLink.style.display = 'block';
+
+    document.getElementById('addSpotPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  cancelEditLink.addEventListener('click', exitEditMode);
 
   function escapeHtml(str){
     const div = document.createElement('div');
@@ -701,7 +789,7 @@ const db = getFirestore(app);
     return div.innerHTML;
   }
 
-  document.getElementById('saveBtn').addEventListener('click', async () => {
+  saveBtn.addEventListener('click', async () => {
     const name = document.getElementById('fName').value.trim();
     if(!name){ document.getElementById('fName').focus(); return; }
     const spotData = {
@@ -714,26 +802,76 @@ const db = getFirestore(app);
       lat: pendingLatLng ? pendingLatLng.lat : null,
       lng: pendingLatLng ? pendingLatLng.lng : null
     };
-    const newId = await addSpotToDb(spotData);
-    spots.push({ id: newId, ...spotData });
 
-    document.getElementById('fName').value = '';
-    document.getElementById('fNotes').value = '';
-    document.getElementById('fEnergy').value = 50;
-    document.getElementById('fSetting').value = 50;
-    if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
-    if(candidateMarker){ map.removeLayer(candidateMarker); candidateMarker = null; }
-    pendingLatLng = null;
-    candidateLatLng = null;
-    confirmPanel.classList.remove('show');
-    locationSearch.value = '';
-    searchResults.innerHTML = '';
-    pinHint.textContent = 'No location set — spot will still save, just won\'t show on the map.';
+    if(editingSpotId){
+      await updateSpotInDb(editingSpotId, spotData);
+      const idx = spots.findIndex(s => s.id === editingSpotId);
+      if(idx !== -1) spots[idx] = { id: editingSpotId, ...spotData };
+    }else{
+      const newId = await addSpotToDb(spotData);
+      spots.push({ id: newId, ...spotData });
+    }
 
+    exitEditMode();
     renderList(); renderMarkers();
   });
 
-  // The matchmaker (reel, spin, weighted pick, result) now lives on spin.html.
+  const reel = document.getElementById('reel');
+  const reelText = document.getElementById('reelText');
+  const spinBtn = document.getElementById('spinBtn');
+  const resultCard = document.getElementById('resultCard');
+
+  function weightedPick(mood){
+    const scored = spots.map(s => ({ spot: s, score: scoreSpot(s, mood) }));
+    const weights = scored.map(x => x.score * x.score);
+    const total = weights.reduce((a,b)=>a+b, 0);
+    let r = Math.random() * total;
+    for(let i=0;i<scored.length;i++){
+      r -= weights[i];
+      if(r <= 0) return scored[i];
+    }
+    return scored[scored.length-1];
+  }
+
+  spinBtn.addEventListener('click', () => {
+    if(spots.length === 0){
+      reelText.textContent = 'Add a spot first';
+      return;
+    }
+    resultCard.classList.remove('show');
+    reel.classList.add('spinning');
+    spinBtn.disabled = true;
+
+    const mood = currentMood();
+    const names = spots.map(s => s.name);
+    let ticks = 0;
+    const maxTicks = 22;
+    const interval = setInterval(() => {
+      reelText.textContent = names[Math.floor(Math.random()*names.length)];
+      ticks++;
+      if(ticks >= maxTicks){
+        clearInterval(interval);
+        reel.classList.remove('spinning');
+        const winner = weightedPick(mood);
+        reelText.textContent = winner.spot.name;
+        showResult(winner);
+        spinBtn.disabled = false;
+      }
+    }, 90 + ticks);
+  });
+
+  function showResult(winner){
+    const s = winner.spot;
+    document.getElementById('rCat').textContent = s.category;
+    document.getElementById('rName').textContent = s.name;
+    document.getElementById('rMatch').textContent = `${winner.score}% match to tonight's mood`;
+    document.getElementById('rNotes').textContent = s.notes || 'No notes saved for this one yet.';
+    resultCard.classList.add('show');
+    if(s.lat != null && markers[s.id]){
+      map.flyTo([s.lat, s.lng], 14, { duration: 0.8 });
+      markers[s.id].openPopup();
+    }
+  }
 
   // ---------- Area switching (so this works for any city, not just Fort Worth) ----------
   const areaLabel = document.getElementById('areaLabel');
