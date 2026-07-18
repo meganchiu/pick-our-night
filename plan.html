@@ -109,6 +109,7 @@
 
   .field{ margin-bottom: 12px; }
   .field label{ display:block; font-size:12px; color: var(--muted); margin-bottom:5px; font-family:'IBM Plex Mono',monospace; }
+  .field label .live{ color: var(--amber); font-size:12px; }
   input[type=text], select, textarea{
     width:100%; background: var(--night-2); border:1px solid var(--line); color: var(--text);
     padding: 9px 11px; border-radius:8px; font-family:'Work Sans',sans-serif; font-size:14px;
@@ -281,11 +282,11 @@
         </div>
       </div>
       <div class="field">
-        <label>Energy level this spot fits (0 tired – 100 energized)</label>
+        <label style="display:flex; justify-content:space-between;"><span>Energy level this spot fits</span><span class="live" id="fEnergyLive">Balanced · 50</span></label>
         <input type="range" id="fEnergy" min="0" max="100" value="50">
       </div>
       <div class="field">
-        <label>Setting (0 indoor – 100 outdoor)</label>
+        <label style="display:flex; justify-content:space-between;"><span>Setting</span><span class="live" id="fSettingLive">Mixed · 50</span></label>
         <input type="range" id="fSetting" min="0" max="100" value="50">
       </div>
       <div class="field">
@@ -745,6 +746,20 @@ const db = getFirestore(app);
   const cancelEditLink = document.getElementById('cancelEditLink');
   const saveBtn = document.getElementById('saveBtn');
 
+  function spotSliderLabelFor(v, lo, mid, hi){
+    if(v < 34) return lo;
+    if(v < 67) return mid;
+    return hi;
+  }
+  function updateSpotSliderLabels(){
+    const e = +document.getElementById('fEnergy').value;
+    const s = +document.getElementById('fSetting').value;
+    document.getElementById('fEnergyLive').textContent = `${spotSliderLabelFor(e, 'Tired', 'Balanced', 'Energized')} · ${e}`;
+    document.getElementById('fSettingLive').textContent = `${spotSliderLabelFor(s, 'Indoor', 'Mixed', 'Outdoor')} · ${s}`;
+  }
+  document.getElementById('fEnergy').addEventListener('input', updateSpotSliderLabels);
+  document.getElementById('fSetting').addEventListener('input', updateSpotSliderLabels);
+
   function resetSpotForm(){
     document.getElementById('fName').value = '';
     document.getElementById('fNotes').value = '';
@@ -760,6 +775,7 @@ const db = getFirestore(app);
     locationSearch.value = '';
     searchResults.innerHTML = '';
     pinHint.textContent = 'No location set — spot will still save, just won\'t show on the map.';
+    updateSpotSliderLabels();
   }
 
   function exitEditMode(){
@@ -784,6 +800,7 @@ const db = getFirestore(app);
     document.getElementById('fEnergy').value = spot.energy;
     document.getElementById('fSetting').value = spot.setting;
     document.getElementById('fNotes').value = spot.notes || '';
+    updateSpotSliderLabels();
 
     if(pendingMarker){ map.removeLayer(pendingMarker); pendingMarker = null; }
     if(spot.lat != null){

@@ -85,6 +85,7 @@
   .mood-row{ margin-bottom:16px; }
   .mood-row label{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; color: var(--text); }
   .mood-row .lo,.mood-row .hi{ color: var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11px; }
+  .mood-row .live{ color: var(--amber); font-family:'IBM Plex Mono',monospace; font-size:12px; }
   input[type=range]{
     -webkit-appearance:none; width:100%; height:6px; border-radius:3px;
     background: linear-gradient(90deg, rgba(255,93,143,.5), rgba(255,200,87,.5));
@@ -155,22 +156,27 @@
     <div class="panel">
       <h2><span class="dot"></span>Set the mood</h2>
       <div class="mood-row">
-        <label><span>Energy</span><span class="lo">Tired</span></label>
+        <label><span>Energy</span><span class="live" id="energyLive">Balanced · 50</span></label>
         <input type="range" id="moodEnergy" min="0" max="100" value="50">
-        <div style="display:flex;justify-content:flex-end"><span class="hi">Energized</span></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span class="lo">Tired</span><span class="hi">Energized</span>
+        </div>
       </div>
       <div class="mood-row">
-        <label><span>Setting</span><span class="lo">Indoor</span></label>
+        <label><span>Setting</span><span class="live" id="settingLive">Mixed · 50</span></label>
         <input type="range" id="moodSetting" min="0" max="100" value="50">
-        <div style="display:flex;justify-content:flex-end"><span class="hi">Outdoor</span></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span class="lo">Indoor</span><span class="hi">Outdoor</span>
+        </div>
       </div>
       <div class="mood-row">
-        <label><span>Budget</span><span class="lo">Free</span></label>
+        <label><span>Budget</span><span class="live" id="budgetLive">Moderate · 50</span></label>
         <input type="range" id="moodBudget" min="0" max="100" value="50">
-        <div style="display:flex;justify-content:flex-end"><span class="hi">Splurge</span></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span class="lo">Free</span><span class="hi">Splurge</span>
+        </div>
       </div>
       <button class="btn pink" id="continueBtn" style="width:100%; margin-top:8px;">Continue →</button>
-      <button class="btn secondary" id="skipToSpinBtn" style="width:100%; margin-top:10px;">Skip straight to the matchmaker →</button>
     </div>
   </div>
 
@@ -333,6 +339,23 @@ const db = getFirestore(app);
     }, 400);
   });
 
+  // ---------- Live slider readouts ----------
+  function moodLabelFor(v, lo, mid, hi){
+    if(v < 34) return lo;
+    if(v < 67) return mid;
+    return hi;
+  }
+  function wireLiveSlider(sliderId, outId, lo, mid, hi){
+    const slider = document.getElementById(sliderId);
+    const out = document.getElementById(outId);
+    slider.addEventListener('input', () => {
+      out.textContent = `${moodLabelFor(+slider.value, lo, mid, hi)} · ${slider.value}`;
+    });
+  }
+  wireLiveSlider('moodEnergy', 'energyLive', 'Tired', 'Balanced', 'Energized');
+  wireLiveSlider('moodSetting', 'settingLive', 'Indoor', 'Mixed', 'Outdoor');
+  wireLiveSlider('moodBudget', 'budgetLive', 'Frugal', 'Moderate', 'Splurge');
+
   // ---------- Continue: hand mood off to plan.html via sessionStorage ----------
   document.getElementById('continueBtn').addEventListener('click', () => {
     const mood = {
@@ -342,17 +365,6 @@ const db = getFirestore(app);
     };
     sessionStorage.setItem('pon_mood', JSON.stringify(mood));
     window.location.href = 'plan.html';
-  });
-
-  // ---------- Skip straight to the matchmaker (still carries the mood over) ----------
-  document.getElementById('skipToSpinBtn').addEventListener('click', () => {
-    const mood = {
-      energy: +document.getElementById('moodEnergy').value,
-      setting: +document.getElementById('moodSetting').value,
-      budget: +document.getElementById('moodBudget').value
-    };
-    sessionStorage.setItem('pon_mood', JSON.stringify(mood));
-    window.location.href = 'spin.html';
   });
 })();
 </script>
